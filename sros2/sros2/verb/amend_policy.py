@@ -95,6 +95,11 @@ class AmendPolicyVerb(VerbExtension):
             '--time-out', '-t',
             default=int(9999), type=int,
             help='a duration for monitoring the events (seconds)')
+        parser.add_argument(
+            '--rate', '-r',
+            default=float(0.25), type=float,
+            help='the rate to re-run the monitor (seconds)')
+
 
     def getEvents(self):
         pass
@@ -150,6 +155,6 @@ class AmendPolicyVerb(VerbExtension):
 
                 # print(node._clock.now(), ' < ', time_point_final)
                 # TODO(artivis) use rate once available
-                time.sleep(0.25)
+                time.sleep(args.rate)
         except KeyboardInterrupt:
             print('done.')
