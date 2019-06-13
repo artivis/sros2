@@ -219,7 +219,6 @@ class AmendPolicyVerb(VerbExtension):
                     filtered_events = self.getNewEvents(node, node_name)
 
                 for filtered_event in filtered_events:
-                    print(filtered_event)
                     self.promptUserAboutPermission(filtered_event)
 
                 # TODO(artivis) use rate once available
