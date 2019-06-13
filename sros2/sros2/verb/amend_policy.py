@@ -34,6 +34,7 @@ from ros2cli.node.direct import DirectNode
 
 from sros2.api import (
     NodeName,
+    get_node_names,
     get_publisher_info,
     get_service_info,
     get_subscriber_info
@@ -66,12 +67,6 @@ def getFQN(node_name, expression):
     else:
         fqn = node_name.ns + '/' + expression
     return fqn
-
-
-class EventList:
-    subscribe = []
-    publish = []
-    reply_service = []
 
 
 class EventPermission:
@@ -120,21 +115,30 @@ class AmendPolicyVerb(VerbExtension):
         arg.completer = FilesCompleter(
             allowednames=('xml'), directories=False)
         parser.add_argument(
+            '--rate', '-r',
+            default=float(0.25), type=float,
+            help='a rate for scanning new events')
+        parser.add_argument(
             '--time-out', '-t',
             default=int(9999), type=int,
             help='a duration for monitoring the events (seconds)')
 
     def getEvents(self, node, node_name):
-        events = EventList
+        events = []
         subscribe_topics = get_subscriber_info(node=node, node_name=node_name)
-        if subscribe_topics:
-            events.subscribe = events.subscribe + subscribe_topics
+        for subscribe_topic in subscribe_topics:
+            events.append(Event(node_name, 'topic', 'subscribe', subscribe_topic.fqn))
         publish_topics = get_publisher_info(node=node, node_name=node_name)
-        if publish_topics:
-            events.publish = events.publish + publish_topics
+        for publish_topic in publish_topics:
+            events.append(Event(node_name, 'topic', 'publish', publish_topic.fqn))
         reply_services = get_service_info(node=node, node_name=node_name)
-        if reply_services:
-            events.reply_service = events.reply_service + reply_services
+        for reply_service in reply_services:
+            events.append(Event(node_name, 'topic', 'reply', reply_service.fqn))
+        return events
+
+    def getNewEvents(self, node, node_name):
+        events = self.getEvents(node, node_name)
+        return self.filterEvents(events)
 
     def getPolicyEventStatus(self, policy, event):
         # Find all profiles for the node in the event
@@ -149,17 +153,13 @@ class AmendPolicyVerb(VerbExtension):
         return EventPermission.reduce(event_permissions)
 
     def filterEvents(self, events):
-
         if events is None:
             return []
-
         not_cached_events = list(set(events).difference(
                                 self.event_cache))
 
         filtered_events = []
         for not_cached_event in not_cached_events:
-            print(not_cached_event)
-            print(getEventPermissionForProfile(self.profile, not_cached_event))
             if (
                 getEventPermissionForProfile(self.profile, not_cached_event) ==
                 EventPermission.ALLOW
@@ -183,8 +183,10 @@ class AmendPolicyVerb(VerbExtension):
             usr_input = input('Do you want to add this event '
                               'to the permission list? (Y/n) : ')
 
+        # For now this only adds 'ALLOW' policies on Y/y/<enter>
+        # N/n opt basically ignores the event
         if usr_input in ['Y', 'y', '']:
-            self.addPermission(event)
+            self.addPermission(event, EventPermission.ALLOW)
             print('Permission granted !')
         elif usr_input in ['N', 'n']:
             print('Permission denied !')
@@ -210,17 +212,28 @@ class AmendPolicyVerb(VerbExtension):
             while (node._clock.now() < time_point_final):
                 print('Scanning for events...')  # , end='\r'
 
-                # TODO(artivis) get_node_name
-                node_name = NodeName('node', '/ns', '/ns/node')
-                events = self.getEvents(node, node_name)
+                node_names = get_node_names(node=node,
+                                            include_hidden_nodes=False)
 
-                filtered_events = self.filterEvents(events)
+                for node_name in node_names:
+                    filtered_events = self.getNewEvents(node, node_name)
 
                 for filtered_event in filtered_events:
+                    print(filtered_event)
                     self.promptUserAboutPermission(filtered_event)
 
                 # TODO(artivis) use rate once available
-                time.sleep(0.25)
+                time.sleep(args.rate)
 
         except KeyboardInterrupt:
             pass
+
+        # TODO(artivis) Do we wanna do a pass on the last one ?
+        # filtered_events = self.getNewEvents(node, node_name)
+        # for filtered_event in filtered_events:
+        #     self.promptUserAboutPermission(filtered_event)
+
+        filtered_events = self.getNewEvents(node, node_name)
+        if filtered_events:
+            print('Remaining ', len(filtered_events),
+                  ' untreated events.')
