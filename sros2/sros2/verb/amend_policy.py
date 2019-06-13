@@ -11,8 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from collections import namedtuple
+import os
 import time
+
+from collections import namedtuple
 
 try:
     from argcomplete.completers import DirectoriesCompleter
@@ -25,12 +27,17 @@ except ImportError:
     def FilesCompleter(*, allowednames, directories):
         return None
 
+from lxml import etree
+
 from rclpy.duration import Duration
 from ros2cli.node.direct import DirectNode
 
 from sros2.verb import VerbExtension
 
-Event = namedtuple('Event', ('node_name', 'permission_type', 'rule_type', 'expression'))
+POLICY_FILE_NOT_FOUND = 'Package policy file not found'
+
+Event = namedtuple('Event',
+                   ('node_name', 'permission_type', 'rule_type', 'expression'))
 
 
 def getFQN(node_name, expression):
@@ -75,7 +82,8 @@ def getEventPermissionForProfile(profile, event):
     for permission_group in permission_groups:
         expression_in_group = False
         for elem in permission_group:
-            if getFQN(event.node_name, elem.text) == getFQN(event.node_name, event.expression):
+            if getFQN(event.node_name, elem.text) == getFQN(event.node_name,
+                                                            event.expression):
                 expression_in_group = True
                 break
         if expression_in_group:
@@ -88,10 +96,11 @@ class AmendPolicyVerb(VerbExtension):
 
     def __init__(self):
         self.event_cache = []
+        self.profile = None
 
     def add_arguments(self, parser, cli_name):
         arg = parser.add_argument(
-            'POLICY_FILE_PATH', help='path of the policy xml file')
+            'policy_file_path', help='path of the policy xml file')
         arg.completer = FilesCompleter(
             allowednames=('xml'), directories=False)
         parser.add_argument(
@@ -108,12 +117,26 @@ class AmendPolicyVerb(VerbExtension):
             path='profiles/profile[@ns="{ns}"][@node="{node}"]'.format(
                 ns=event.node_name.ns,
                 node=event.node_name.node))
-        event_permissions = [getEventPermissionForProfile(p, event) for p in profiles]
+
+        event_permissions =
+        [getEventPermissionForProfile(p, event) for p in profiles]
+
         return EventPermission.reduce(event_permissions)
 
     def filterEvents(self, events):
-        return list(set(unregistered_events).difference(
-                self.event_cache))
+
+        not_cached_events = list(set(events).difference(
+                                self.event_cache))
+
+        filtered_events = []
+        for not_cached_event in not_cached_events:
+            if getEventPermissionForProfile(self.profile, not_cached_event) ==
+            EventPermission.ALLOW:
+                keepCached(not_cached_event)
+            else:
+                filtered_events.append(not_cached_event)
+
+        return not_cached_event
 
     def addPermission(self, event):
         pass
@@ -145,8 +168,13 @@ class AmendPolicyVerb(VerbExtension):
     def main(self, *, args):
         node = DirectNode(args)
 
-        time_point_final = node.get_clock().now() + \
-            Duration(seconds=args.time_out)
+        time_point_final = node.get_clock().now() +
+        Duration(seconds=args.time_out)
+
+        if not os.path.isfile(policy_file_path):
+            return POLICY_FILE_NOT_FOUND
+
+        self.profile = etree.parse(policy_file_path)
 
         try:
             while (node._clock.now() < time_point_final):
@@ -154,8 +182,8 @@ class AmendPolicyVerb(VerbExtension):
 
                 unregistered_events = self.getEvents()
 
-                filtered_unregistered_events = \
-                    filterEvents(unregistered_events)
+                filtered_unregistered_events =
+                filterEvents(unregistered_events)
 
                 for unregistered_event in filtered_unregistered_events:
                     self.promptUserAboutPermission(unregistered_event)
