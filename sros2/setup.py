@@ -62,6 +62,8 @@ enhance the security of ROS 2 deployments.""",
         'sros2.verb': [
             'create_key = sros2.verb.create_key:CreateKeyVerb',
             'create_keystore = sros2.verb.create_keystore:CreateKeystoreVerb',
+            'create_logging_config = sros2.verb.create_logging_config'
+            ':CreateLoggingConfigVerb',
             'create_permission = sros2.verb.create_permission'
             ':CreatePermissionVerb',
             'distribute_key = sros2.verb.distribute_key:DistributeKeyVerb',

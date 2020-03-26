@@ -83,6 +83,13 @@ export ROS_SECURITY_STRATEGY=Enforce
 
 These variables need to be defined in each terminal used for the demo. For convenience you can add it to your `~/.bashrc`.
 
+### Enable security logging (optional)
+
+```bash
+cd ~/sros2_demo
+ros2 security create_logging_config demo_keys /talker
+```
+
 ### Run the demo
 
 ROS2 allows you to [change DDS implementation at runtime](https://index.ros.org/doc/ros2/Tutorials/Working-with-multiple-RMW-implementations).

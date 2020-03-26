@@ -16,6 +16,7 @@ from collections import namedtuple
 import datetime
 import os
 import shutil
+from string import Template
 import sys
 
 from cryptography import x509
@@ -328,6 +329,36 @@ def create_key(keystore_path, identity):
         keystore_ca_cert_path, keystore_ca_key_path, permissions_path, signed_permissions_path)
 
     return True
+
+
+def create_logging_config(keystore_path, identity, config):
+    if not is_valid_keystore(keystore_path):
+        print("'%s' is not a valid keystore " % keystore_path)
+        return False
+    if not is_key_name_valid(identity):
+        return False
+    print("creating security logging config for identity: '%s'" % identity)
+
+    relative_path = os.path.normpath(identity.lstrip('/'))
+    log_dir = os.path.join(keystore_path, relative_path)
+    os.makedirs(log_dir, exist_ok=True)
+
+    dst = os.path.join(log_dir, 'logging.xml')
+
+    absolute_path = os.path.join(os.path.expanduser('~'),
+                                 '.ros', 'security', relative_path, 'logs.txt')
+    log_level = "INFORMATIONAL_LEVEL"
+    distribute = "true"
+    d = {'absolute_path':absolute_path, 'log_level':log_level, 'distribute':distribute}
+
+    # qos = ['first', 'second', 'third']
+    # d={ 'title':title, 'subtitle':subtitle, 'qos':'\n'.join(qos) }
+
+    #do the substitution
+    result = Template(config).substitute(d)
+
+    with open(dst, 'w') as stream:
+        stream.write(result)
 
 
 def list_keys(keystore_path):
